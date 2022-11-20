@@ -4,7 +4,7 @@ use std::sync::mpsc::{self, Sender};
 use std::sync::Arc;
 use std::time::Duration;
 
-use traffic_light::{Color, InitializedGlobalDevice, State};
+use cleware_traffic_light::{Color, InitializedGlobalDevice, State};
 
 fn main() {
     let handler = Handler::create();
