@@ -15,6 +15,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "76a284da2e6fe2092f2353e51713435363112dfd60030e22add80be333fb928f"
 
 [[package]]
+name = "cleware-traffic-light"
+version = "0.1.0"
+dependencies = [
+ "rusb",
+]
+
+[[package]]
+name = "cleware-traffic-light-server"
+version = "0.1.0"
+dependencies = [
+ "cleware-traffic-light",
+ "local-ip-address",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.137"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -117,21 +132,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "traffic-light"
-version = "0.1.0"
-dependencies = [
- "rusb",
-]
-
-[[package]]
-name = "traffic-light-server"
-version = "0.1.0"
-dependencies = [
- "local-ip-address",
- "traffic-light",
 ]
 
 [[package]]

@@ -1,7 +1,6 @@
 use std::io::{Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::sync::mpsc::{self, Sender};
-use std::sync::Arc;
 use std::time::Duration;
 
 use cleware_traffic_light::{Color, InitializedGlobalDevice, State};
@@ -12,13 +11,16 @@ fn main() {
         TcpListener::bind(SocketAddr::new(local_ip_address::local_ip().unwrap(), 6633)).unwrap();
     println!("Listening on: {}", incoming.local_addr().unwrap());
     while let Ok((mut stream, _)) = incoming.accept() {
-        if let Some((color, state)) = handle_connection(&mut stream) {
-            let _ = stream.write_all("HTTP/1.1 200 OK\r\n\r\n".as_bytes());
-            handler.send(color, state);
-        } else {
-            let _ = stream.write_all("HTTP/1.1 400 BAD REQUEST\r\n\r\n".as_bytes());
-        }
-        let _ = stream.shutdown(Shutdown::Both);
+        let handler_clone = handler.clone();
+        std::thread::spawn(move || {
+            if let Some((color, state)) = handle_connection(&mut stream) {
+                let _ = stream.write_all("HTTP/1.1 200 OK\r\n\r\n".as_bytes());
+                handler_clone.send(color, state);
+            } else {
+                let _ = stream.write_all("HTTP/1.1 400 BAD REQUEST\r\n\r\n".as_bytes());
+            }
+            let _ = stream.shutdown(Shutdown::Both);
+        });
     }
 }
 
@@ -58,16 +60,16 @@ enum ExtendedState {
     Blinking { off: Duration, on: Duration },
 }
 
+#[derive(Clone)]
 struct Handler {
     sender: Sender<(Color, ExtendedState)>,
 }
 impl Handler {
     fn create() -> Self {
         let (sender, receiver) = mpsc::channel();
-        let light = Arc::new(InitializedGlobalDevice::create_with_any().unwrap());
         std::thread::spawn(move || {
             for color in [Color::Red, Color::Yellow, Color::Green] {
-                light.set_light(color, State::Off).unwrap();
+                InitializedGlobalDevice::set_light(color, State::Off).unwrap();
             }
             let (thread_killer_red_s, thread_killer_red_r) = mpsc::channel();
             let (thread_killer_yellow_s, thread_killer_yellow_r) = mpsc::channel();
@@ -77,18 +79,17 @@ impl Handler {
                 (Color::Yellow, thread_killer_yellow_r),
                 (Color::Green, thread_killer_green_r),
             ] {
-                let light = light.clone();
                 std::thread::spawn(move || {
                     'outer: for (off, on) in killer.iter().flatten() {
                         loop {
                             if let Ok(None) = killer.recv_timeout(off) {
                                 continue 'outer;
                             }
-                            light.set_light(color, State::On).unwrap();
+                            InitializedGlobalDevice::set_light(color, State::On).unwrap();
                             if let Ok(None) = killer.recv_timeout(on) {
                                 continue 'outer;
                             }
-                            light.set_light(color, State::Off).unwrap();
+                            InitializedGlobalDevice::set_light(color, State::Off).unwrap();
                         }
                     }
                 });
@@ -102,8 +103,12 @@ impl Handler {
                 let color_usize = (color as u8 % 0x10) as usize;
                 thread_killer_s[color_usize].send(None).unwrap();
                 match state {
-                    ExtendedState::Off => light.set_light(color, State::Off).unwrap(),
-                    ExtendedState::On => light.set_light(color, State::On).unwrap(),
+                    ExtendedState::Off => {
+                        InitializedGlobalDevice::set_light(color, State::Off).unwrap()
+                    }
+                    ExtendedState::On => {
+                        InitializedGlobalDevice::set_light(color, State::On).unwrap()
+                    }
                     ExtendedState::Blinking { off, on } => {
                         thread_killer_s[color_usize].send(Some((off, on))).unwrap();
                     }
